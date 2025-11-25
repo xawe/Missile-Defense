@@ -43,39 +43,84 @@ let ufos = [];
 const mouse = { x: 0, y: 0 };
 
 // ==================== SOUND SYSTEM ====================
+let sfxVolume = 1.0;
+let musicVolume = 0.5;
+let isMuted = false;
+
 const explosionSounds = [];
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-// Create 10 different explosion sounds with varying characteristics
-function createExplosionSound(index) {
+// Create realistic explosion sounds using white noise + filters + sub-bass
+function createRealisticExplosion(index) {
     return function () {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        if (isMuted) return;
 
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = sfxVolume;
+        masterGain.connect(ctx.destination);
 
-        // Variations for each sound
-        const baseFreq = 100 - (index * 5);
-        const freqVariation = index * 10;
+        // 1. White noise (impact)
+        const bufferSize = ctx.sampleRate * 0.5;
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
 
-        oscillator.frequency.setValueAtTime(baseFreq + freqVariation, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(20, audioContext.currentTime + 0.5);
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
 
-        // Cycle through different waveform types
-        oscillator.type = ['sine', 'square', 'sawtooth', 'triangle'][index % 4];
+        // 2. Low-pass filter (muffled sound)
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800 - (index * 50), now);
+        filter.Q.setValueAtTime(1, now);
 
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        // 3. Noise envelope
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.8, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
 
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
+        // 4. Sub-bass (deep impact)
+        const bass = ctx.createOscillator();
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(60 - (index * 3), now);
+        bass.frequency.exponentialRampToValueAtTime(20, now + 0.4);
+
+        const bassGain = ctx.createGain();
+        bassGain.gain.setValueAtTime(0.6, now);
+        bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+        // 5. Delay for reverb simulation
+        const delay = ctx.createDelay();
+        delay.delayTime.value = 0.05;
+        const delayGain = ctx.createGain();
+        delayGain.gain.value = 0.3;
+
+        // Connections
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        noiseGain.connect(delay);
+        delay.connect(delayGain);
+        delayGain.connect(masterGain);
+
+        bass.connect(bassGain);
+        bassGain.connect(masterGain);
+
+        // Start
+        noise.start(now);
+        noise.stop(now + 0.5);
+        bass.start(now);
+        bass.stop(now + 0.5);
     };
 }
 
-// Initialize 10 different explosion sounds
+// Initialize 10 different realistic explosion sounds
 for (let i = 0; i < 10; i++) {
-    explosionSounds.push(createExplosionSound(i));
+    explosionSounds.push(createRealisticExplosion(i));
 }
 
 // Play a random explosion sound
@@ -83,6 +128,125 @@ function playExplosionSound() {
     const randomSound = explosionSounds[Math.floor(Math.random() * explosionSounds.length)];
     randomSound();
 }
+
+// Missile firing sounds
+const missileSounds = {
+    standard: function () {
+        if (isMuted) return;
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.2 * sfxVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.15);
+    },
+
+    homing: function () {
+        if (isMuted) return;
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.2);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.15 * sfxVolume, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.2);
+    },
+
+    machineGun: function () {
+        if (isMuted) return;
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+
+        const bufferSize = ctx.sampleRate * 0.05;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 1000;
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.1 * sfxVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        noise.start(now);
+    },
+
+    cannon: function () {
+        if (isMuted) return;
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+
+        // Deep boom
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(80, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.4 * sfxVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+    },
+
+    laser: function () {
+        if (isMuted) return;
+        const ctx = audioContext;
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.3);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.2 * sfxVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.3);
+    }
+};
+
 
 // ==================== EVENT LISTENERS ====================
 window.addEventListener('resize', resize);
@@ -122,6 +286,24 @@ window.addEventListener('mousedown', e => {
 window.addEventListener('mouseup', () => {
     isMouseDown = false;
 });
+
+// Volume control event listeners
+document.getElementById('sfx-volume').addEventListener('input', (e) => {
+    sfxVolume = e.target.value / 100;
+    document.getElementById('sfx-value').textContent = e.target.value + '%';
+});
+
+document.getElementById('music-volume').addEventListener('input', (e) => {
+    musicVolume = e.target.value / 100;
+    document.getElementById('music-value').textContent = e.target.value + '%';
+    // TODO: Update background music volume when implemented
+});
+
+document.getElementById('mute-toggle').addEventListener('click', () => {
+    isMuted = !isMuted;
+    document.getElementById('mute-toggle').textContent = isMuted ? '🔇' : '🔊';
+});
+
 
 // ==================== UI FUNCTIONS ====================
 function setWeapon(type) {
@@ -766,6 +948,7 @@ function attemptFire(x, y) {
     if (selectedWeapon === 2) {
         const activeHomingFromBase = playerMissiles.filter(p => p.active && p.type === 2 && p.sourceId === closestBase.id).length;
         if (activeHomingFromBase >= 4) return;
+        missileSounds.homing();
         closestBase.fireMissile(x, y, 2);
     }
     else if (selectedWeapon === 3) {
@@ -773,6 +956,7 @@ function attemptFire(x, y) {
         if (now - closestBase.lastShotTime > 100) {
             if (closestBase.mgAmmo > 0) {
                 closestBase.mgAmmo--;
+                missileSounds.machineGun();
                 closestBase.fireMissile(x, y, 3);
                 closestBase.lastShotTime = now;
                 updateMgUI(closestBase);
@@ -784,12 +968,14 @@ function attemptFire(x, y) {
     }
     else if (selectedWeapon === 4) {
         if (now - closestBase.cannonLastShot > cannonCooldown) {
+            missileSounds.cannon();
             closestBase.fireCannonSpread(x, y);
             closestBase.cannonLastShot = now;
         }
     }
     else if (selectedWeapon === 5) {
         if (now - closestBase.laserLastShot > laserCooldown) {
+            missileSounds.laser();
             closestBase.fireLaser(x, y);
             closestBase.laserLastShot = now;
         }
@@ -800,6 +986,7 @@ function attemptFire(x, y) {
         }
     }
     else {
+        missileSounds.standard();
         closestBase.fireMissile(x, y, 1);
     }
 }

@@ -106,3 +106,83 @@ p {
     margin-top: 2px;
     color: #aaa;
 }
+
+/* Audio Controls */
+#audio-controls {
+    margin-top: 15px;
+    background: rgba(0, 20, 40, 0.7);
+    padding: 10px;
+    border: 1px solid #0ff;
+    border-radius: 5px;
+    pointer-events: auto;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.volume-control label {
+    font-size: 12px;
+    color: #0ff;
+    min-width: 50px;
+}
+
+.volume-control input[type="range"] {
+    flex: 1;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #0ff;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.volume-control input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #0ff;
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+}
+
+.volume-control span {
+    font-size: 11px;
+    color: #aaa;
+    min-width: 35px;
+    text-align: right;
+}
+
+#mute-toggle {
+    width: 100%;
+    padding: 5px;
+    background: rgba(0, 100, 150, 0.5);
+    border: 1px solid #0ff;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+#mute-toggle:hover {
+    background: rgba(0, 150, 200, 0.7);
+    box-shadow: 0 0 10px #0ff;
+}
+
+#mute-toggle:active {
+    transform: scale(0.95);
+}

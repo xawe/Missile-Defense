@@ -46,6 +46,20 @@
             <div id="mg-bar"></div>
         </div>
         <div id="status-text"></div>
+
+        <div id="audio-controls">
+            <div class="volume-control">
+                <label for="sfx-volume">SFX:</label>
+                <input type="range" id="sfx-volume" min="0" max="100" value="100">
+                <span id="sfx-value">100%</span>
+            </div>
+            <div class="volume-control">
+                <label for="music-volume">Música:</label>
+                <input type="range" id="music-volume" min="0" max="100" value="50">
+                <span id="music-value">50%</span>
+            </div>
+            <button id="mute-toggle" title="Mute/Unmute">🔊</button>
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
