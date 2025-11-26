@@ -22,7 +22,7 @@ let isSpaceDown = false;
 let lastAutoClickTime = 0;
 
 // ==================== FIRE RATE CONSTANTS ====================
-const autoClickRate = 480; // ms - base rate for most weapons
+const autoClickRate = 180; // ms - base rate for most weapons
 const standardMissileRate = Math.round(autoClickRate * 1.3); // 234ms - 30% slower for weapon 1
 
 // ==================== WEAPON CONFIGURATIONS ====================
@@ -303,15 +303,6 @@ document.getElementById('mute-toggle').addEventListener('click', () => {
     isMuted = !isMuted;
     document.getElementById('mute-toggle').textContent = isMuted ? '🔇' : '🔊';
 });
-
-const audioToggleBtn = document.getElementById('audio-toggle');
-if (audioToggleBtn) {
-    audioToggleBtn.addEventListener('click', () => {
-        const audioControls = document.getElementById('audio-controls');
-        audioControls.classList.toggle('minimized');
-        audioToggleBtn.textContent = audioControls.classList.contains('minimized') ? '+' : '-';
-    });
-}
 
 
 // ==================== UI FUNCTIONS ====================
@@ -817,7 +808,7 @@ class PlayerMissile {
         this.target = null;
 
         if (type === 1) {
-            this.speed = 3.5;
+            this.speed = 7.5;
             this.color = '#00ffff';
         } else if (type === 2) {
             this.speed = 3.92 * homingMissileSpeedMultiplier;

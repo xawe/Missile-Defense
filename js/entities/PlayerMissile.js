@@ -18,7 +18,7 @@ export class PlayerMissile {
         this.target = null;
 
         if (type === 1) {
-            this.speed = 7.5;
+            this.speed = 5.25; // Reduced by 30% (was 7.5)
             this.color = '#00ffff';
         } else if (type === 2) {
             this.speed = 3.92 * homingMissileSpeedMultiplier;

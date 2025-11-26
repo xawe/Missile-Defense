@@ -4,7 +4,7 @@
 
 export const WEAPON_CONFIG = {
     autoClickRate: 180, // ms - base rate for most weapons
-    standardMissileRate: Math.round(180 * 1.3), // 234ms - 30% slower for weapon 1
+    standardMissileRate: 334, // 334ms - Reduced frequency by 30% (was ~234ms)
     mgMaxAmmo: 20,
     cannonCooldown: 1000,
     laserCooldown: 3000
