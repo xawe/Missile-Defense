@@ -815,6 +815,7 @@ class PlayerMissile {
 
         this.creationTime = Date.now();
         this.target = null;
+        this.gravity = 0; // Default gravity
 
         if (type === 1) {
             this.speed = 3.5;
@@ -827,6 +828,7 @@ class PlayerMissile {
         } else if (type === 3) {
             this.speed = 6;
             this.color = '#ffff00';
+            this.gravity = 0.015; // Add gravity for machine gun
         } else if (type === 4) {
             this.speed = 5;
             this.color = '#ff8800';
@@ -882,6 +884,11 @@ class PlayerMissile {
                 this.vx = Math.cos(newAngle) * this.speed;
                 this.vy = Math.sin(newAngle) * this.speed;
             }
+        }
+
+        // Apply gravity if applicable
+        if (this.gravity !== 0) {
+            this.vy += this.gravity;
         }
 
         this.x += this.vx;
