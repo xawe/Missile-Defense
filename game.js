@@ -816,9 +816,11 @@ class PlayerMissile {
         this.creationTime = Date.now();
         this.target = null;
         this.gravity = 0; // Default gravity
+        this.acceleration = 0; // Default acceleration
 
         if (type === 1) {
-            this.speed = 3.5;
+            this.speed = 1.5; // Start slow
+            this.acceleration = 0.02; // Accelerate
             this.color = '#00ffff';
         } else if (type === 2) {
             this.speed = 3.92 * homingMissileSpeedMultiplier;
@@ -834,11 +836,11 @@ class PlayerMissile {
             this.color = '#ff8800';
         }
 
-        let angle = Math.atan2(targetY - this.startY, targetX - this.startX);
-        angle += angleOffset;
+        this.angle = Math.atan2(targetY - this.startY, targetX - this.startX);
+        this.angle += angleOffset;
 
-        this.vx = Math.cos(angle) * this.speed;
-        this.vy = Math.sin(angle) * this.speed;
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
     }
 
     update() {
@@ -886,6 +888,13 @@ class PlayerMissile {
             }
         }
 
+        // Apply acceleration for type 1
+        if (this.type === 1 && this.acceleration > 0) {
+            this.speed += this.acceleration;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+        }
+
         // Apply gravity if applicable
         if (this.gravity !== 0) {
             this.vy += this.gravity;
@@ -896,6 +905,8 @@ class PlayerMissile {
 
         if (this.type === 1) {
             const distToTarget = Math.hypot(this.x - this.targetX, this.y - this.targetY);
+            // Check if we passed the target or are close enough
+            // Since speed increases, we need to be careful not to overshoot too much in one frame
             if (distToTarget < this.speed || (this.vy < 0 && this.y <= this.targetY)) {
                 this.active = false;
                 createExplosion(this.targetX, this.targetY, this.color, false);
