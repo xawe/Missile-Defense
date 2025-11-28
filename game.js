@@ -257,7 +257,7 @@ window.addEventListener('mousemove', e => {
 });
 
 window.addEventListener('keydown', e => {
-    if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+    if (['1', '2', '3', '4', '5', '6', '7'].includes(e.key)) {
         setWeapon(parseInt(e.key));
     }
     if (e.code === 'Space') {
@@ -342,6 +342,8 @@ function setWeapon(type) {
         statusText.innerText = "Velocidade: Standard (Reduzida)";
     } else if (type === 6) {
         statusText.innerText = "Drone Teleportador | Max: 3 | Kamikaze Explosivo";
+    } else if (type === 7) {
+        statusText.innerText = "Missel Nuclear | Max: 1 | Raio: 400 | Explosão 360°";
     }
 }
 
@@ -709,6 +711,17 @@ class SmokeParticle extends Particle {
     }
 }
 
+class TrailParticle extends Particle {
+    constructor(x, y, color) {
+        super(x, y, color);
+        this.vx = (Math.random() - 0.5) * 1;
+        this.vy = (Math.random() - 0.5) * 1;
+        this.gravity = 0.02;
+        this.decay = 0.016; // ~1 second life (60 frames)
+        this.size = Math.random() * 2 + 1;
+    }
+}
+
 class Explosion {
     constructor(x, y, color, maxRadius = 70) {
         this.x = x;
@@ -819,13 +832,13 @@ class PlayerMissile {
         this.acceleration = 0; // Default acceleration
 
         if (type === 1) {
-            this.speed = 1.5; // Start slow
-            this.acceleration = 0.02; // Accelerate
+            this.speed = 3.5;
             this.color = '#00ffff';
         } else if (type === 2) {
-            this.speed = 3.92 * homingMissileSpeedMultiplier;
+            this.speed = 0.8 * homingMissileSpeedMultiplier; // Start slow
+            this.acceleration = 0.02; // Accelerate
             this.color = '#00ff00';
-            this.turnSpeed = 0.016;
+            this.turnSpeed = 0.010;
             this.maxFlightTime = 7000;
         } else if (type === 3) {
             this.speed = 6;
@@ -834,6 +847,11 @@ class PlayerMissile {
         } else if (type === 4) {
             this.speed = 5;
             this.color = '#ff8800';
+            this.gravity = 0.02; // Add gravity for cannon
+        } else if (type === 7) {
+            this.speed = 2.0 * homingMissileSpeedMultiplier; // Same initial speed as weapon 2
+            this.color = '#ff0000e5'; // Purple/Pink for Nuclear
+            // Constant speed, no acceleration
         }
 
         this.angle = Math.atan2(targetY - this.startY, targetX - this.startX);
@@ -849,6 +867,11 @@ class PlayerMissile {
                 this.active = false;
                 createExplosion(this.x, this.y, this.color, false);
                 return;
+            }
+
+            // Apply acceleration for type 2
+            if (this.acceleration > 0) {
+                this.speed += this.acceleration;
             }
 
             if (!this.target || !this.target.active) {
@@ -885,14 +908,12 @@ class PlayerMissile {
                 }
                 this.vx = Math.cos(newAngle) * this.speed;
                 this.vy = Math.sin(newAngle) * this.speed;
+            } else {
+                // Update velocity vector with new speed if no target
+                const currentAngle = Math.atan2(this.vy, this.vx);
+                this.vx = Math.cos(currentAngle) * this.speed;
+                this.vy = Math.sin(currentAngle) * this.speed;
             }
-        }
-
-        // Apply acceleration for type 1
-        if (this.type === 1 && this.acceleration > 0) {
-            this.speed += this.acceleration;
-            this.vx = Math.cos(this.angle) * this.speed;
-            this.vy = Math.sin(this.angle) * this.speed;
         }
 
         // Apply gravity if applicable
@@ -900,16 +921,24 @@ class PlayerMissile {
             this.vy += this.gravity;
         }
 
+        if (this.type === 4) {
+            particles.push(new TrailParticle(this.x, this.y, this.color));
+        }
+
         this.x += this.vx;
         this.y += this.vy;
 
         if (this.type === 1) {
             const distToTarget = Math.hypot(this.x - this.targetX, this.y - this.targetY);
-            // Check if we passed the target or are close enough
-            // Since speed increases, we need to be careful not to overshoot too much in one frame
             if (distToTarget < this.speed || (this.vy < 0 && this.y <= this.targetY)) {
                 this.active = false;
                 createExplosion(this.targetX, this.targetY, this.color, false);
+            }
+        } else if (this.type === 7) {
+            const distToTarget = Math.hypot(this.x - this.targetX, this.y - this.targetY);
+            if (distToTarget < this.speed || (this.vy < 0 && this.y <= this.targetY)) {
+                this.active = false;
+                createNuclearExplosion(this.targetX, this.targetY);
             }
         } else {
             if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
@@ -920,7 +949,7 @@ class PlayerMissile {
 
     draw() {
         ctx.beginPath();
-        if (this.type === 1 || this.type === 4) {
+        if (this.type === 1) {
             ctx.moveTo(this.startX, this.startY);
             ctx.lineTo(this.x, this.y);
         } else {
@@ -1012,6 +1041,14 @@ function attemptFire(x, y) {
             ufos.push(new UFO(closestBase.x, closestBase.y - 30));
         }
     }
+    else if (selectedWeapon === 7) {
+        // Check if a nuclear missile is already active
+        const activeNuclear = playerMissiles.some(p => p.active && p.type === 7);
+        if (!activeNuclear) {
+            missileSounds.standard(); // Use standard sound or maybe a deeper one if available
+            closestBase.fireMissile(x, y, 7);
+        }
+    }
     else {
         missileSounds.standard();
         closestBase.fireMissile(x, y, 1);
@@ -1034,6 +1071,32 @@ function createExplosion(x, y, color, isGroundImpact = false) {
     }
 
     for (let i = 0; i < 20; i++) {
+        particles.push(new SmokeParticle(x, y));
+    }
+}
+
+function createNuclearExplosion(x, y) {
+    playExplosionSound();
+
+    const radius = 400;
+    explosions.push(new Explosion(x, y, '#e60000ff', radius));
+
+    // More particles for 360 effect
+    for (let i = 0; i < 4000; i++) {
+        const angle = (Math.PI * 2 * i) / 4000;
+        const speed = Math.random() * 8 + 2;
+        const p = new Particle(x, y, `hsl(${Math.random() * 360}, 100%, 50%)`);
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed;
+        p.life = 2.5;
+        particles.push(p);
+    }
+
+    for (let i = 0; i < 1000; i++) {
+        particles.push(new FireParticle(x, y));
+    }
+
+    for (let i = 0; i < 200; i++) {
         particles.push(new SmokeParticle(x, y));
     }
 }
