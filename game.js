@@ -353,7 +353,7 @@ function setWeapon(type) {
     } else if (type === 7) {
         statusText.innerText = "Missel Nuclear | Max: 1 | Raio: 400 | Explosão 360° | Cooldown: 30s";
     } else if (type === 8) {
-        statusText.innerText = "Rajada: 10 misseis/base | 30 total | Cooldown: 60s";
+        statusText.innerText = "Rajada Teleguiada: 10 misseis/base | 30 total | Cooldown: 60s";
     }
 }
 
@@ -1103,15 +1103,19 @@ function attemptFire(x, y) {
     else if (selectedWeapon === 8) {
         const now = Date.now();
         if (now > missileBarrageCooldownEndTime) {
-            // Fire 10 missiles from each active base
+            // Fire 10 missiles from each active base with 500ms interval between each missile
             bases.forEach(base => {
                 if (base.active) {
                     for (let i = 0; i < 10; i++) {
-                        base.fireMissile(x, y, 8);
+                        setTimeout(() => {
+                            if (base.active) {
+                                base.fireMissile(x, y, 8);
+                                missileSounds.homing();
+                            }
+                        }, i * 200);
                     }
                 }
             });
-            missileSounds.homing();
             missileBarrageCooldownEndTime = now + 60000;
         }
     }
