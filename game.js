@@ -30,6 +30,7 @@ const mgMaxAmmo = 20;
 const cannonCooldown = 1000;
 const laserCooldown = 3000;
 let nuclearCooldownEndTime = 0;
+let missileBarrageCooldownEndTime = 0;
 
 // ==================== GAME ENTITIES ====================
 let cities = [];
@@ -264,7 +265,7 @@ window.addEventListener('mousemove', e => {
 });
 
 window.addEventListener('keydown', e => {
-    if (['1', '2', '3', '4', '5', '6', '7'].includes(e.key)) {
+    if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) {
         setWeapon(parseInt(e.key));
     }
     if (e.code === 'Space') {
@@ -351,6 +352,8 @@ function setWeapon(type) {
         statusText.innerText = "Drone Teleportador | Max: 3 | Kamikaze Explosivo";
     } else if (type === 7) {
         statusText.innerText = "Missel Nuclear | Max: 1 | Raio: 400 | Explosão 360° | Cooldown: 30s";
+    } else if (type === 8) {
+        statusText.innerText = "Rajada: 10 misseis/base | 30 total | Cooldown: 60s";
     }
 }
 
@@ -892,6 +895,12 @@ class PlayerMissile {
             this.speed = 2.0 * homingMissileSpeedMultiplier; // Same initial speed as weapon 2
             this.color = '#ff0000e5'; // Purple/Pink for Nuclear
             // Constant speed, no acceleration
+        } else if (type === 8) {
+            this.speed = 0.6 * homingMissileSpeedMultiplier; // Start slow
+            this.acceleration = 0.008; // Accelerate
+            this.color = '#ffff33'; // Neon yellow
+            this.turnSpeed = 0.015;
+            this.maxFlightTime = 15000;
         }
 
         this.angle = Math.atan2(targetY - this.startY, targetX - this.startX);
@@ -902,14 +911,14 @@ class PlayerMissile {
     }
 
     update() {
-        if (this.type === 2) {
+        if (this.type === 2 || this.type === 8) {
             if (Date.now() - this.creationTime > this.maxFlightTime) {
                 this.active = false;
                 createExplosion(this.x, this.y, this.color, false);
                 return;
             }
 
-            // Apply acceleration for type 2
+            // Apply acceleration for type 2 and 8
             if (this.acceleration > 0) {
                 this.speed += this.acceleration;
             }
@@ -917,7 +926,7 @@ class PlayerMissile {
             if (!this.target || !this.target.active) {
                 this.target = null;
 
-                const otherHomingMissiles = playerMissiles.filter(p => p !== this && p.active && p.type === 2 && p.target);
+                const otherHomingMissiles = playerMissiles.filter(p => p !== this && p.active && (p.type === 2 || p.type === 8) && p.target);
                 const busyTargets = otherHomingMissiles.map(p => p.target);
 
                 let candidates = enemyMissiles.filter(e => e.active && !busyTargets.includes(e));
@@ -1089,6 +1098,21 @@ function attemptFire(x, y) {
         if (!activeNuclear && now > nuclearCooldownEndTime) {
             missileSounds.standard(); // Use standard sound or maybe a deeper one if available
             closestBase.fireMissile(x, y, 7);
+        }
+    }
+    else if (selectedWeapon === 8) {
+        const now = Date.now();
+        if (now > missileBarrageCooldownEndTime) {
+            // Fire 10 missiles from each active base
+            bases.forEach(base => {
+                if (base.active) {
+                    for (let i = 0; i < 10; i++) {
+                        base.fireMissile(x, y, 8);
+                    }
+                }
+            });
+            missileSounds.homing();
+            missileBarrageCooldownEndTime = now + 60000;
         }
     }
     else {
@@ -1311,6 +1335,10 @@ function resetGame() {
     comboCount = 0;
     comboTimer = 0;
     comboActive = false;
+
+    // Reset weapon cooldowns
+    nuclearCooldownEndTime = 0;
+    missileBarrageCooldownEndTime = 0;
 
     initBases();
     initCities();
