@@ -29,6 +29,7 @@ const standardMissileRate = Math.round(autoClickRate * 1.3); // 234ms - 30% slow
 const mgMaxAmmo = 20;
 const cannonCooldown = 1000;
 const laserCooldown = 3000;
+let nuclearCooldownEndTime = 0;
 
 // ==================== GAME ENTITIES ====================
 let cities = [];
@@ -39,6 +40,12 @@ let explosions = [];
 let particles = [];
 let lasers = [];
 let ufos = [];
+let floatingTexts = [];
+
+// ==================== COMBO SYSTEM ====================
+let comboCount = 0;
+let comboTimer = 0;
+let comboActive = false;
 
 const mouse = { x: 0, y: 0 };
 
@@ -343,7 +350,7 @@ function setWeapon(type) {
     } else if (type === 6) {
         statusText.innerText = "Drone Teleportador | Max: 3 | Kamikaze Explosivo";
     } else if (type === 7) {
-        statusText.innerText = "Missel Nuclear | Max: 1 | Raio: 400 | Explosão 360°";
+        statusText.innerText = "Missel Nuclear | Max: 1 | Raio: 400 | Explosão 360° | Cooldown: 30s";
     }
 }
 
@@ -722,6 +729,39 @@ class TrailParticle extends Particle {
     }
 }
 
+class FloatingText {
+    constructor(x, y, text, color) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color || '#fff';
+        this.life = 3.0;
+        this.vy = -1;
+        this.active = true;
+    }
+
+    update() {
+        this.y += this.vy;
+        this.life -= 0.016;
+        if (this.life <= 0) this.active = false;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life;
+
+        // Vibrant color cycle
+        const hue = (Date.now() / 10) % 360;
+        ctx.fillStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.font = 'bold 32px Courier New';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 8;
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+    }
+}
+
 class Explosion {
     constructor(x, y, color, maxRadius = 70) {
         this.x = x;
@@ -1044,7 +1084,9 @@ function attemptFire(x, y) {
     else if (selectedWeapon === 7) {
         // Check if a nuclear missile is already active
         const activeNuclear = playerMissiles.some(p => p.active && p.type === 7);
-        if (!activeNuclear) {
+        // Check cooldown
+        const now = Date.now();
+        if (!activeNuclear && now > nuclearCooldownEndTime) {
             missileSounds.standard(); // Use standard sound or maybe a deeper one if available
             closestBase.fireMissile(x, y, 7);
         }
@@ -1077,6 +1119,9 @@ function createExplosion(x, y, color, isGroundImpact = false) {
 
 function createNuclearExplosion(x, y) {
     playExplosionSound();
+
+    // Set cooldown for 30 seconds from now
+    nuclearCooldownEndTime = Date.now() + 30000;
 
     const radius = 400;
     explosions.push(new Explosion(x, y, '#e60000ff', radius));
@@ -1135,15 +1180,33 @@ function distToSegment(p, v, w) {
 function checkCollisions() {
     explosions.forEach(exp => {
         if (!exp.active) return;
+
+        // Count how many enemies this explosion hits
+        let hitsThisExplosion = 0;
+
         enemyMissiles.forEach(enemy => {
             if (!enemy.active) return;
             const dist = Math.hypot(enemy.x - exp.x, enemy.y - exp.y);
             if (dist < exp.radius) {
                 enemy.active = false;
-                score += 100;
+                hitsThisExplosion++;
                 createExplosion(enemy.x, enemy.y, '#ffaa00', false);
             }
         });
+
+        // Apply combo logic
+        if (hitsThisExplosion > 0) {
+            comboCount++;
+            comboTimer = Date.now() + 2000;
+            comboActive = true;
+
+            // If multiple hits, apply 2x multiplier
+            if (hitsThisExplosion >= 2) {
+                score += 100 * 2 * hitsThisExplosion;
+            } else {
+                score += 100;
+            }
+        }
     });
 
     playerMissiles.forEach(pm => {
@@ -1157,7 +1220,13 @@ function checkCollisions() {
             if (dist < hitRadius) {
                 enemy.active = false;
                 pm.active = false;
+
+                // Combo logic
+                comboCount++;
+                comboTimer = Date.now() + 2000;
+                comboActive = true;
                 score += 150;
+
                 createExplosion(enemy.x, enemy.y, '#ffaa00', false);
 
                 if (pm.type === 2) {
@@ -1180,7 +1249,13 @@ function checkCollisions() {
 
             if (dist < 10) {
                 enemy.active = false;
+
+                // Combo logic
+                comboCount++;
+                comboTimer = Date.now() + 2000;
+                comboActive = true;
                 score += 200;
+
                 createExplosion(enemy.x, enemy.y, '#ff00ff', false);
             }
         });
@@ -1204,6 +1279,11 @@ function checkCollisions() {
                     if (e.active && Math.hypot(e.x - ufo.x, e.y - ufo.y) < blastRadius) {
                         e.active = false;
                         createExplosion(e.x, e.y, '#ffaa00', false);
+
+                        // Combo logic
+                        comboCount++;
+                        comboTimer = Date.now() + 2000;
+                        comboActive = true;
                         score += 50;
                     }
                 });
@@ -1224,7 +1304,13 @@ function resetGame() {
     particles = [];
     lasers = [];
     ufos = [];
+    floatingTexts = [];
     homingMissileSpeedMultiplier = 1;
+
+    // Reset combo system
+    comboCount = 0;
+    comboTimer = 0;
+    comboActive = false;
 
     initBases();
     initCities();
@@ -1243,6 +1329,15 @@ function loop() {
     const activeBase = bases.find(b => b.active);
     if (activeBase) {
         updateMgUI(activeBase);
+    }
+
+    // Combo Timeout Check
+    if (comboActive && Date.now() > comboTimer) {
+        if (comboCount > 1) {
+            floatingTexts.push(new FloatingText(width / 2, height / 2, `COMBO ${comboCount} X`, '#ffff00'));
+        }
+        comboCount = 0;
+        comboActive = false;
     }
 
     // AUTO-FIRE LOGIC with weapon-specific fire rates
@@ -1309,6 +1404,12 @@ function loop() {
         u.update();
         u.draw();
         if (!u.active) ufos.splice(index, 1);
+    });
+
+    floatingTexts.forEach((ft, index) => {
+        ft.update();
+        ft.draw();
+        if (!ft.active) floatingTexts.splice(index, 1);
     });
 
     cities.forEach(city => city.draw());
