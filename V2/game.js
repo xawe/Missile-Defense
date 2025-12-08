@@ -59,6 +59,8 @@ const mouse = { x: 0, y: 0 };
 let sfxVolume = 1.0;
 let musicVolume = 0.5;
 let isMuted = false;
+let isPaused = false;
+let isAutoFire = false;
 
 const explosionSounds = [];
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -275,6 +277,12 @@ window.addEventListener('keydown', e => {
     }
     if (e.code === 'Space') {
         isSpaceDown = true;
+    }
+    if (e.key.toLowerCase() === 'p') {
+        togglePause();
+    }
+    if (e.key.toLowerCase() === 'a') {
+        toggleAutoFire();
     }
 });
 
@@ -1417,6 +1425,12 @@ function resetGame() {
 function loop(currentTime) {
     if (gameOver) return;
 
+    if (isPaused) {
+        lastTime = currentTime; // Prevent large delta time jump when unpausing
+        requestAnimationFrame(loop);
+        return;
+    }
+
     // Calculate delta time in seconds
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
@@ -1442,8 +1456,10 @@ function loop(currentTime) {
     }
 
     // AUTO-FIRE LOGIC with weapon-specific fire rates
-    if (isMouseDown || isSpaceDown) {
+    if (isMouseDown || isSpaceDown || isAutoFire) {
         if (selectedWeapon === 3) {
+            // Mouse gun needs mouse position, but if auto-fire is on and mouse not moving/clicked,
+            // we still use last known mouse position (mouse.x, mouse.y)
             attemptFire(mouse.x, mouse.y);
         } else {
             // Use standardMissileRate for weapon 1, autoClickRate for others
@@ -1532,6 +1548,22 @@ function loop(currentTime) {
     updateScore();
     frameCount++;
     requestAnimationFrame(loop);
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    const pauseIndicator = document.getElementById('pause-indicator');
+    if (pauseIndicator) {
+        pauseIndicator.style.display = isPaused ? 'block' : 'none';
+    }
+}
+
+function toggleAutoFire() {
+    isAutoFire = !isAutoFire;
+    const autoIndicator = document.getElementById('auto-indicator');
+    if (autoIndicator) {
+        autoIndicator.style.display = isAutoFire ? 'block' : 'none';
+    }
 }
 
 // ==================== INITIALIZATION ====================
