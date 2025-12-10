@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Defesa de Mísseis - Arsenal Tático</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div id="ui">
+        <h1>DEFESA PLANETÁRIA</h1>
+        <p>Clique para disparar.</p>
+        <div id="score-display">PONTUAÇÃO: 0</div>
+
+        <div id="weapon-select">
+            <div id="w1" class="weapon active" onclick="setWeapon(1)">
+                PADRÃO
+                <span class="key-hint">[1]</span>
+            </div>
+            <div id="w2" class="weapon" onclick="setWeapon(2)">
+                TELEGUIADO
+                <span class="key-hint">[2]</span>
+            </div>
+            <div id="w3" class="weapon" onclick="setWeapon(3)">
+                METRALHADORA
+                <span class="key-hint">[3]</span>
+            </div>
+            <div id="w4" class="weapon" onclick="setWeapon(4)">
+                CANHÃO
+                <span class="key-hint">[4]</span>
+            </div>
+            <div id="w5" class="weapon" onclick="setWeapon(5)">
+                LASER
+                <span class="key-hint">[5]</span>
+            </div>
+            <div id="w6" class="weapon" onclick="setWeapon(6)">
+                UFO
+                <span class="key-hint">[6]</span>
+            </div>
+            <div id="w7" class="weapon" onclick="setWeapon(7)">
+                NUCLEAR
+                <span class="key-hint">[7]</span>
+            </div>
+            <div id="w8" class="weapon" onclick="setWeapon(8)">
+                RAJADA
+                <span class="key-hint">[8]</span>
+            </div>
+        </div>
+
+        <div id="mg-status">
+            <div id="mg-bar"></div>
+        </div>
+        <div id="status-text"></div>
+
+        <div id="audio-controls">
+            <div class="audio-header">
+                <span>ÁUDIO</span>
+                <button id="audio-toggle" title="Minimizar/Maximizar">-</button>
+            </div>
+            <div id="audio-content">
+                <div class="volume-control">
+                    <label for="sfx-volume">SFX:</label>
+                    <input type="range" id="sfx-volume" min="0" max="100" value="100">
+                    <span id="sfx-value">100%</span>
+                </div>
+                <div class="volume-control">
+                    <label for="music-volume">Música:</label>
+                    <input type="range" id="music-volume" min="0" max="100" value="50">
+                    <span id="music-value">50%</span>
+                </div>
+                <button id="mute-toggle" title="Mute/Unmute">🔊</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script src="game.js"></script>
+</body>
+
+</html>
