@@ -15,6 +15,11 @@ let frameCount = 0;
 let difficultyMultiplier = 1;
 let homingMissileSpeedMultiplier = 1;
 
+// ==================== DELTA TIME SYSTEM ====================
+let lastTime = performance.now();
+let enemySpawnTimer = 0;
+const ENEMY_SPAWN_BASE_RATE = 0.33; // seconds between spawns at start
+
 // ==================== WEAPON CONTROL ====================
 let selectedWeapon = 1;
 let isMouseDown = false;
@@ -54,6 +59,8 @@ const mouse = { x: 0, y: 0 };
 let sfxVolume = 1.0;
 let musicVolume = 0.5;
 let isMuted = false;
+let isPaused = false;
+let isAutoFire = false;
 
 const explosionSounds = [];
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -271,6 +278,12 @@ window.addEventListener('keydown', e => {
     if (e.code === 'Space') {
         isSpaceDown = true;
     }
+    if (e.key.toLowerCase() === 'p') {
+        togglePause();
+    }
+    if (e.key.toLowerCase() === 'a') {
+        toggleAutoFire();
+    }
 });
 
 window.addEventListener('keyup', e => {
@@ -439,9 +452,9 @@ class DefenseBase {
         this.lastShotTime = 0;
     }
 
-    update() {
+    update(dt) {
         if (this.cooldownTimer > 0) {
-            this.cooldownTimer -= 16.67;
+            this.cooldownTimer -= dt * 1000; // dt is in seconds, convert to ms
             if (this.cooldownTimer <= 0) {
                 this.active = true;
                 this.cooldownTimer = 0;
@@ -536,8 +549,8 @@ class LaserBeam {
         this.color = isShortRange ? '#00ff00' : '#ff00ff';
     }
 
-    update() {
-        this.life -= this.decay;
+    update(dt) {
+        this.life -= this.decay * dt * 60;
         if (this.life <= 0) this.active = false;
     }
 
@@ -657,13 +670,15 @@ class Particle {
         this.size = 3;
     }
 
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vy += this.gravity;
-        this.vx *= 0.95;
-        this.vy *= 0.95;
-        this.life -= this.decay;
+    update(dt) {
+        const dtNorm = dt * 60; // Normalize to 60 FPS
+        this.x += this.vx * dtNorm;
+        this.y += this.vy * dtNorm;
+        this.vy += this.gravity * dtNorm;
+        const friction = Math.pow(0.95, dtNorm);
+        this.vx *= friction;
+        this.vy *= friction;
+        this.life -= this.decay * dtNorm;
         if (this.life <= 0) this.active = false;
     }
 
@@ -685,9 +700,9 @@ class FireParticle extends Particle {
         this.size = Math.random() * 4 + 2;
     }
 
-    update() {
-        super.update();
-        this.size = Math.max(0.5, this.size - 0.1);
+    update(dt) {
+        super.update(dt);
+        this.size = Math.max(0.5, this.size - (0.1 * dt * 60));
     }
 }
 
@@ -701,13 +716,15 @@ class SmokeParticle extends Particle {
         this.size = Math.random() * 5 + 3;
     }
 
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vx *= 0.99;
-        this.vy *= 0.99;
-        this.size += 0.1;
-        this.life -= this.decay;
+    update(dt) {
+        const dtNorm = dt * 60;
+        this.x += this.vx * dtNorm;
+        this.y += this.vy * dtNorm;
+        const friction = Math.pow(0.99, dtNorm);
+        this.vx *= friction;
+        this.vy *= friction;
+        this.size += 0.1 * dtNorm;
+        this.life -= this.decay * dtNorm;
         if (this.life <= 0) this.active = false;
     }
 
@@ -732,6 +749,18 @@ class TrailParticle extends Particle {
     }
 }
 
+class MissileTrailParticle extends Particle {
+    constructor(x, y, color) {
+        super(x, y, color);
+        this.vx = (Math.random() - 0.5) * 0.5;
+        this.vy = (Math.random() - 0.5) * 0.5;
+        this.gravity = 0.02; // No gravity for smoke trail
+        this.decay = 0.016; // 1 second life (60 frames at 1/60 decay)
+        this.life = 1.3;
+        this.size = Math.random() * 3 + 1;
+    }
+}
+
 class FloatingText {
     constructor(x, y, text, color) {
         this.x = x;
@@ -743,9 +772,9 @@ class FloatingText {
         this.active = true;
     }
 
-    update() {
-        this.y += this.vy;
-        this.life -= 0.016;
+    update(dt) {
+        this.y += this.vy * dt * 60;
+        this.life -= 0.016 * dt * 60;
         if (this.life <= 0) this.active = false;
     }
 
@@ -778,11 +807,12 @@ class Explosion {
         this.active = true;
     }
 
-    update() {
+    update(dt) {
+        const dtNorm = dt * 60;
         if (this.radius < this.maxRadius) {
-            this.radius += this.growthRate;
+            this.radius += this.growthRate * dtNorm;
         } else {
-            this.life -= this.decay;
+            this.life -= this.decay * dtNorm;
         }
         if (this.life <= 0) this.active = false;
     }
@@ -832,9 +862,10 @@ class EnemyMissile {
         this.color = '#ff0055';
     }
 
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
+    update(dt) {
+        const dtNorm = dt * 60;
+        this.x += this.vx * dtNorm;
+        this.y += this.vy * dtNorm;
 
         if (this.y >= height - 20) {
             this.active = false;
@@ -910,7 +941,9 @@ class PlayerMissile {
         this.vy = Math.sin(this.angle) * this.speed;
     }
 
-    update() {
+    update(dt) {
+        const dtNorm = dt * 60;
+
         if (this.type === 2 || this.type === 8) {
             if (Date.now() - this.creationTime > this.maxFlightTime) {
                 this.active = false;
@@ -920,7 +953,7 @@ class PlayerMissile {
 
             // Apply acceleration for type 2 and 8
             if (this.acceleration > 0) {
-                this.speed += this.acceleration;
+                this.speed += this.acceleration * dtNorm;
             }
 
             if (!this.target || !this.target.active) {
@@ -950,10 +983,11 @@ class PlayerMissile {
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
 
                 let newAngle = currentAngle;
-                if (Math.abs(angleDiff) < this.turnSpeed) {
+                const turnAmount = this.turnSpeed * dtNorm;
+                if (Math.abs(angleDiff) < turnAmount) {
                     newAngle = targetAngle;
                 } else {
-                    newAngle += Math.sign(angleDiff) * this.turnSpeed;
+                    newAngle += Math.sign(angleDiff) * turnAmount;
                 }
                 this.vx = Math.cos(newAngle) * this.speed;
                 this.vy = Math.sin(newAngle) * this.speed;
@@ -967,25 +1001,29 @@ class PlayerMissile {
 
         // Apply gravity if applicable
         if (this.gravity !== 0) {
-            this.vy += this.gravity;
+            this.vy += this.gravity * dtNorm;
         }
 
         if (this.type === 4) {
             particles.push(new TrailParticle(this.x, this.y, this.color));
+        } else if (this.type === 1) {
+            // Weapon 1 trail
+            particles.push(new MissileTrailParticle(this.x, this.y, this.color));
         }
 
-        this.x += this.vx;
-        this.y += this.vy;
+        this.x += this.vx * dtNorm;
+        this.y += this.vy * dtNorm;
 
         if (this.type === 1) {
             const distToTarget = Math.hypot(this.x - this.targetX, this.y - this.targetY);
-            if (distToTarget < this.speed || (this.vy < 0 && this.y <= this.targetY)) {
+            if (distToTarget < this.speed * dtNorm || (this.vy < 0 && this.y <= this.targetY)) {
                 this.active = false;
-                createExplosion(this.targetX, this.targetY, this.color, false);
+                // 20% larger explosion for Weapon 1
+                createExplosion(this.targetX, this.targetY, this.color, false, 1.2);
             }
         } else if (this.type === 7) {
             const distToTarget = Math.hypot(this.x - this.targetX, this.y - this.targetY);
-            if (distToTarget < this.speed || (this.vy < 0 && this.y <= this.targetY)) {
+            if (distToTarget < this.speed * dtNorm || (this.vy < 0 && this.y <= this.targetY)) {
                 this.active = false;
                 createNuclearExplosion(this.targetX, this.targetY);
             }
@@ -999,8 +1037,9 @@ class PlayerMissile {
     draw() {
         ctx.beginPath();
         if (this.type === 1) {
-            ctx.moveTo(this.startX, this.startY);
-            ctx.lineTo(this.x, this.y);
+            // Invisible body, just particles
+            // ctx.moveTo(this.startX, this.startY);
+            // ctx.lineTo(this.x, this.y);
         } else {
             ctx.moveTo(this.x - this.vx * 3, this.y - this.vy * 3);
             ctx.lineTo(this.x, this.y);
@@ -1120,17 +1159,44 @@ function attemptFire(x, y) {
         }
     }
     else {
-        missileSounds.standard();
-        closestBase.fireMissile(x, y, 1);
+        // Weapon 1: Limit to 5 missiles per base
+        const activeStandardMs = playerMissiles.filter(p =>
+            p.active &&
+            p.type === 1 &&
+            p.sourceId === closestBase.id
+        ).length;
+
+        if (activeStandardMs < 7) {
+            missileSounds.standard();
+            closestBase.fireMissile(x, y, 1);
+        }
     }
 }
 
-function createExplosion(x, y, color, isGroundImpact = false) {
+function createExplosion(x, y, color, isGroundImpact = false, radiusMultiplier = 1.0) {
+    // Shockwave effect: Disturb existing particles (trails, smoke, etc.)
+    // We do this BEFORE creating new particles to avoid affecting the ones generated by this explosion
+    // which starts at (x,y) and would get a biased push to the right (angle 0).
+    const baseRadius = isGroundImpact ? 80 : 70;
+    const finalRadius = baseRadius * radiusMultiplier;
+
+    particles.forEach(p => {
+        if (!p.active) return;
+        const dist = Math.hypot(p.x - x, p.y - y);
+        const effectRadius = (isGroundImpact ? 150 : 100) * radiusMultiplier;
+
+        if (dist < effectRadius) {
+            const angle = Math.atan2(p.y - y, p.x - x);
+            const force = (effectRadius - dist) / 15; // Tuned force
+            p.vx += Math.cos(angle) * force;
+            p.vy += Math.sin(angle) * force;
+        }
+    });
+
     // Play random explosion sound
     playExplosionSound();
 
-    const radius = isGroundImpact ? 80 : 70;
-    explosions.push(new Explosion(x, y, color, radius));
+    explosions.push(new Explosion(x, y, color, finalRadius));
 
     for (let i = 0; i < 50; i++) {
         particles.push(new Particle(x, y, color));
@@ -1344,16 +1410,33 @@ function resetGame() {
     nuclearCooldownEndTime = 0;
     missileBarrageCooldownEndTime = 0;
 
+    // Reset delta time
+    lastTime = performance.now();
+    enemySpawnTimer = 0;
+
     initBases();
     initCities();
     gameOver = false;
-    loop();
+    loop(performance.now());
 }
 
 // ==================== MAIN LOOP ====================
 
-function loop() {
+function loop(currentTime) {
     if (gameOver) return;
+
+    if (isPaused) {
+        lastTime = currentTime; // Prevent large delta time jump when unpausing
+        requestAnimationFrame(loop);
+        return;
+    }
+
+    // Calculate delta time in seconds
+    const deltaTime = (currentTime - lastTime) / 1000;
+    lastTime = currentTime;
+
+    // Limit delta time to prevent spiral of death (max 0.1s = 10 FPS minimum)
+    const dt = Math.min(deltaTime, 0.1);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.fillRect(0, 0, width, height);
@@ -1373,8 +1456,10 @@ function loop() {
     }
 
     // AUTO-FIRE LOGIC with weapon-specific fire rates
-    if (isMouseDown || isSpaceDown) {
+    if (isMouseDown || isSpaceDown || isAutoFire) {
         if (selectedWeapon === 3) {
+            // Mouse gun needs mouse position, but if auto-fire is on and mouse not moving/clicked,
+            // we still use last known mouse position (mouse.x, mouse.y)
             attemptFire(mouse.x, mouse.y);
         } else {
             // Use standardMissileRate for weapon 1, autoClickRate for others
@@ -1397,37 +1482,42 @@ function loop() {
         return;
     }
 
-    if (frameCount % Math.max(20, 100 - Math.floor(score / 500)) === 0) {
+    // Enemy spawning with delta time (framerate independent)
+    enemySpawnTimer += dt;
+    const spawnRate = Math.max(ENEMY_SPAWN_BASE_RATE, 1.67 - (score / 3000));
+
+    if (enemySpawnTimer >= spawnRate) {
         enemyMissiles.push(new EnemyMissile());
         difficultyMultiplier = Math.min(1.3, 1 + (score / 5000));
+        enemySpawnTimer = 0;
     }
 
     particles.forEach((p, index) => {
-        p.update();
+        p.update(dt);
         p.draw();
         if (!p.active) particles.splice(index, 1);
     });
 
     explosions.forEach((e, index) => {
-        e.update();
+        e.update(dt);
         e.draw();
         if (!e.active) explosions.splice(index, 1);
     });
 
     lasers.forEach((l, index) => {
-        l.update();
+        l.update(dt);
         l.draw();
         if (!l.active) lasers.splice(index, 1);
     });
 
     enemyMissiles.forEach((m, index) => {
-        m.update();
+        m.update(dt);
         m.draw();
         if (!m.active) enemyMissiles.splice(index, 1);
     });
 
     playerMissiles.forEach((m, index) => {
-        m.update();
+        m.update(dt);
         m.draw();
         if (!m.active) playerMissiles.splice(index, 1);
     });
@@ -1439,7 +1529,7 @@ function loop() {
     });
 
     floatingTexts.forEach((ft, index) => {
-        ft.update();
+        ft.update(dt);
         ft.draw();
         if (!ft.active) floatingTexts.splice(index, 1);
     });
@@ -1447,7 +1537,7 @@ function loop() {
     cities.forEach(city => city.draw());
 
     bases.forEach(base => {
-        base.update();
+        base.update(dt);
         base.draw();
     });
 
@@ -1460,9 +1550,25 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
+function togglePause() {
+    isPaused = !isPaused;
+    const pauseIndicator = document.getElementById('pause-indicator');
+    if (pauseIndicator) {
+        pauseIndicator.style.display = isPaused ? 'block' : 'none';
+    }
+}
+
+function toggleAutoFire() {
+    isAutoFire = !isAutoFire;
+    const autoIndicator = document.getElementById('auto-indicator');
+    if (autoIndicator) {
+        autoIndicator.style.display = isAutoFire ? 'block' : 'none';
+    }
+}
+
 // ==================== INITIALIZATION ====================
 resize();
 initCities();
 initBases();
 updateMgUI(bases[0]);
-loop();
+loop(performance.now());
