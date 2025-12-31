@@ -41,4 +41,6 @@ window.addEventListener('DOMContentLoaded', () => {
             audioToggleBtn.textContent = audioControls.classList.contains('minimized') ? '+' : '-';
         });
     }
+
+
 });
